@@ -1,56 +1,70 @@
-
-import os
+from keras.models import load_model
+from time import sleep
+from keras.preprocessing.image import img_to_array
+from keras.preprocessing import image
 import cv2
 import numpy as np
-from keras.models import model_from_json
-from keras.preprocessing import image
 
-#load model
-model = model_from_json(open("fer.json", "r").read())
-#load weights
-model.load_weights('fer.h5')
+face_classifier = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+classifier =load_model('Emotion_little_vgg2.h5')
+
+class_labels = ['Angry','Happy','Neutral','Sad','Surprise']
+
+# def face_detector(img):
+#     # Convert image to grayscale
+#     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+#     faces = face_classifier.detectMultiScale(gray,1.3,5)
+#     if faces is ():
+#         return (0,0,0,0),np.zeros((48,48),np.uint8),img
+
+#     for (x,y,w,h) in faces:
+#         cv2.rectangle(img,(x,y),(x+w,y+h),(255,0,0),2)
+#         roi_gray = gray[y:y+h,x:x+w]
+
+#     try:
+#         roi_gray = cv2.resize(roi_gray,(48,48),interpolation=cv2.INTER_AREA)
+#     except:
+#         return (x,w,y,h),np.zeros((48,48),np.uint8),img
+#     return (x,w,y,h),roi_gray,img
 
 
-face_haar_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+cap = cv2.VideoCapture(0)
 
 
-cap=cv2.VideoCapture(0)
 
 while True:
-    ret,test_img=cap.read()# captures frame and returns boolean value and captured image
-    if not ret:
-        continue
-    gray_img= cv2.cvtColor(test_img, cv2.COLOR_BGR2GRAY)
+    # Grab a single frame of video
+    ret, frame = cap.read()
+    labels = []
+    gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+    faces = face_classifier.detectMultiScale(gray,1.3,5)
 
-    faces_detected = face_haar_cascade.detectMultiScale(gray_img, 1.32, 5)
+    for (x,y,w,h) in faces:
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+        roi_gray = gray[y:y+h,x:x+w]
+        roi_gray = cv2.resize(roi_gray,(48,48),interpolation=cv2.INTER_AREA)
+    # rect,face,image = face_detector(frame)
 
 
-    for (x,y,w,h) in faces_detected:
-        cv2.rectangle(test_img,(x,y),(x+w,y+h),(255,0,0),thickness=7)
-        roi_gray=gray_img[y:y+w,x:x+h]#cropping region of interest i.e. face area from  image
-        roi_gray=cv2.resize(roi_gray,(48,48))
-        img_pixels = image.img_to_array(roi_gray)
-        img_pixels = np.expand_dims(img_pixels, axis = 0)
-        img_pixels /= 255
+        if np.sum([roi_gray])!=0:
+            roi = roi_gray.astype('float')/255.0
+            roi = img_to_array(roi)
+            roi = np.expand_dims(roi,axis=0)
 
-        predictions = model.predict(img_pixels)
+        # make a prediction on the ROI, then lookup the class
 
-        #find max indexed array
-        max_index = np.argmax(predictions[0])
-
-        emotions = ('angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral')
-        predicted_emotion = emotions[max_index]
-
-        cv2.putText(test_img, predicted_emotion, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
-
-    resized_img = cv2.resize(test_img, (1000, 700))
-    cv2.imshow('Facial emotion analysis ',resized_img)
-    k=cv2.waitKey(30) & 0xff
-    if k==27:
-    	break
-
+            preds = classifier.predict(roi)[0]
+            label=class_labels[preds.argmax()]
+            label_position = (x,y)
+            cv2.putText(frame,label,label_position,cv2.FONT_HERSHEY_SIMPLEX,2,(0,255,0),3)
+        else:
+            cv2.putText(frame,'No Face Found',(20,60),cv2.FONT_HERSHEY_SIMPLEX,2,(0,255,0),3)
+    cv2.imshow('Emotion Detector',frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 cap.release()
-cv2.destroyAllWindows
+cv2.destroyAllWindows()
+
 
 
